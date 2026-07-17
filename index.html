@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="AI news for people who create with AI - no code required.">
+    <title>Agent Dispatch</title>
+    <style>
+      @font-face {
+        font-family: "Outfit";
+        src: url("assets/outfit-variable.woff2") format("woff2");
+        font-weight: 100 900;
+        font-style: normal;
+        font-display: swap;
+      }
+
+      :root {
+        color-scheme: dark;
+        --bg: #0a0a14;
+        --panel: #11111f;
+        --green: #21d760;
+        --green-soft: #6af095;
+        --white: #f7f8fb;
+        --body: #c8ccd4;
+        --dim: #717783;
+        --line: rgba(247, 248, 251, 0.14);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        min-height: 100%;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--white);
+        font-family: "Outfit", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-weight: 300;
+        letter-spacing: 0;
+        text-rendering: geometricPrecision;
+      }
+
+      .page {
+        min-height: 100svh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 48px 24px 34px;
+      }
+
+      .shell {
+        width: min(100%, 1040px);
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: 156px minmax(0, 1fr);
+        gap: 56px;
+        align-items: center;
+      }
+
+      .mark {
+        width: 156px;
+        height: 158px;
+        display: block;
+        object-fit: contain;
+        border-radius: 28px;
+        box-shadow: 0 0 0 1px rgba(33, 215, 96, 0.18), 0 18px 48px rgba(0, 0, 0, 0.55);
+      }
+
+      .wordmark {
+        margin: 0;
+        font-size: 6rem;
+        font-weight: 100;
+        line-height: 0.9;
+        letter-spacing: 0;
+      }
+
+      .mission {
+        max-width: 720px;
+        margin: 28px 0 0;
+        color: var(--green);
+        font-size: 1.55rem;
+        font-weight: 300;
+        line-height: 1.34;
+      }
+
+      .summary {
+        max-width: 680px;
+        margin: 26px 0 0;
+        color: var(--body);
+        font-size: 1.1rem;
+        font-weight: 300;
+        line-height: 1.72;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 34px;
+      }
+
+      .button {
+        display: inline-flex;
+        min-height: 48px;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0 18px;
+        color: var(--white);
+        background: var(--panel);
+        font-size: 0.98rem;
+        font-weight: 300;
+        line-height: 1;
+        text-decoration: none;
+        transition: border-color 160ms ease, color 160ms ease, transform 160ms ease;
+      }
+
+      .button.primary {
+        border-color: rgba(33, 215, 96, 0.78);
+        color: #06120a;
+        background: var(--green);
+      }
+
+      .button:hover {
+        border-color: var(--green-soft);
+        color: var(--green-soft);
+        transform: translateY(-1px);
+      }
+
+      .button.primary:hover {
+        color: #06120a;
+        background: var(--green-soft);
+      }
+
+      .button:focus-visible {
+        outline: 2px solid var(--green-soft);
+        outline-offset: 4px;
+      }
+
+      .footer {
+        margin-top: 76px;
+        color: var(--dim);
+        font-size: 0.78rem;
+        font-weight: 300;
+        line-height: 1.5;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .button {
+          transition: none;
+        }
+
+        .button:hover {
+          transform: none;
+        }
+      }
+
+      @media (max-width: 780px) {
+        .page {
+          align-items: flex-start;
+          padding: 44px 22px 30px;
+        }
+
+        .hero {
+          grid-template-columns: 1fr;
+          gap: 30px;
+        }
+
+        .mark {
+          width: 94px;
+          height: 96px;
+        }
+
+        .wordmark {
+          font-size: 2.42rem;
+          line-height: 0.98;
+        }
+
+        .mission {
+          margin-top: 22px;
+          font-size: 1.22rem;
+          line-height: 1.42;
+        }
+
+        .summary {
+          margin-top: 24px;
+          font-size: 1rem;
+          line-height: 1.68;
+        }
+
+        .actions {
+          gap: 10px;
+          margin-top: 30px;
+        }
+
+        .button {
+          min-height: 48px;
+          padding: 0 16px;
+        }
+
+        .footer {
+          margin-top: 64px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <div class="shell">
+        <section class="hero" aria-label="Agent Dispatch">
+          <img class="mark" src="assets/arrow-logo.png" alt="">
+          <div>
+            <h1 class="wordmark">AGENT DISPATCH</h1>
+            <p class="mission">AI news for people who create with AI - no code required.</p>
+            <p class="summary">Agent Dispatch covers new models, tools, skills, and repos from a creator's point of view. The focus is simple: what changed, what it can help you make, and whether it is worth trying, comparing, or saving for later.</p>
+            <nav class="actions" aria-label="Agent Dispatch links">
+              <a class="button primary" href="https://x.com/agent_dispatch" target="_blank" rel="noopener noreferrer">Follow on X</a>
+              <a class="button" href="https://www.youtube.com/@agentdispatch" target="_blank" rel="noopener noreferrer">YouTube</a>
+            </nav>
+            <footer class="footer">an INITIATOR production</footer>
+          </div>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>
