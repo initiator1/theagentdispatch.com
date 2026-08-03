@@ -250,6 +250,7 @@
     <script>
       (() => {
         const canvas = document.getElementById("field");
+        const scrim = document.querySelector(".scrim");
         const ctx = canvas.getContext("2d", { alpha: false });
         const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -258,18 +259,22 @@
         const BG = "#0a0a0a";
 
         // Logo geometry in a 0-100 space, traced from the brand mark.
+        // Trailing flag is the stroke colour: green, white, green, white, green.
+        const STROKE_W = 8.15;
         const STROKES = [
-          [13.80, 44.80, 37.70, 20.90],
-          [16.80, 61.70, 54.60, 23.90],
-          [21.46, 79.04, 74.76, 25.74],
-          [37.60, 83.90, 75.40, 46.10],
-          [54.60, 86.90, 78.50, 63.00],
+          [13.80, 44.80, 37.70, 20.90, 0],
+          [16.80, 61.70, 54.60, 23.90, 1],
+          [21.46, 79.04, 74.76, 25.74, 0],
+          [37.60, 83.90, 75.40, 46.10, 1],
+          [54.60, 86.90, 78.50, 63.00, 0],
         ];
         const HEAD = [[90.60, 9.90], [78.58, 38.90], [72.60, 27.90], [61.60, 21.92]];
 
         let w = 0, h = 0, dpr = 1;
         let agents = [];
         let glyph = [];
+        let glyphDot = 2;
+        let markGeom = null;
 
         const pointer = { x: -9999, y: -9999, tx: -9999, ty: -9999, active: false };
 
@@ -293,8 +298,8 @@
 
         function agentCount() {
           const area = w * h;
-          const base = Math.round(area / 2200);
-          return Math.max(110, Math.min(base, w < 640 ? 240 : 560));
+          const base = Math.round(area / 1300);
+          return Math.max(150, Math.min(base, w < 640 ? 360 : 1000));
         }
 
         function pointInHead(px, py) {
@@ -306,42 +311,87 @@
           return inside;
         }
 
-        // Sample target points across the mark so the swarm can resolve into it.
+        function polygonArea(poly) {
+          let s = 0;
+          for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+            s += poly[j][0] * poly[i][1] - poly[i][0] * poly[j][1];
+          }
+          return Math.abs(s) / 2;
+        }
+
+        // Target points for the assembled mark. Each stroke is filled as a
+        // ribbon on an even lattice — sampling the centreline instead reads as
+        // a loose scatter — and every point carries its own stroke colour so
+        // the green/white/green/white/green order survives assembly.
         function buildGlyph() {
-          const size = Math.min(w, h) * (w < 640 ? 0.86 : 0.74);
+          const size = Math.min(w, h) * (w < 640 ? 0.62 : 0.46);
           const ox = w / 2 - size / 2;
           const oy = h / 2 - size / 2;
-          const map = (x, y) => [ox + (x / 100) * size, oy + (y / 100) * size];
+          const S = size / 100;
+          const map = (x, y) => [ox + x * S, oy + y * S];
+
+          const budget = agentCount();
+          const geom = STROKES.map(([x1, y1, x2, y2, white]) => {
+            const len = Math.hypot(x2 - x1, y2 - y1);
+            return { x1, y1, x2, y2, white, len, area: len * STROKE_W };
+          });
+          const totalArea = geom.reduce((a, s) => a + s.area, 0) + polygonArea(HEAD);
+          const spacing = Math.sqrt(totalArea / budget);
+          // Near-zero: the lattice should read as clean parallel edges, and
+          // jitter is what made the assembled mark look approximate.
+          const wob = spacing * 0.06;
 
           const pts = [];
-          const lengths = STROKES.map(([x1, y1, x2, y2]) => Math.hypot(x2 - x1, y2 - y1));
-          const total = lengths.reduce((a, b) => a + b, 0);
-          const strokeShare = 0.78;
-          const target = agentCount();
-
-          STROKES.forEach(([x1, y1, x2, y2], i) => {
-            const n = Math.max(6, Math.round((lengths[i] / total) * target * strokeShare));
-            for (let k = 0; k < n; k++) {
-              const t = n === 1 ? 0.5 : k / (n - 1);
-              const jitter = (Math.random() - 0.5) * 3.4;
-              const nx = -(y2 - y1) / lengths[i], ny = (x2 - x1) / lengths[i];
-              pts.push(map(x1 + (x2 - x1) * t + nx * jitter, y1 + (y2 - y1) * t + ny * jitter));
+          for (const s of geom) {
+            const ux = (s.x2 - s.x1) / s.len, uy = (s.y2 - s.y1) / s.len;
+            const px = -uy, py = ux;
+            const nAlong = Math.max(2, Math.round(s.len / spacing));
+            const nAcross = Math.max(2, Math.round(STROKE_W / spacing));
+            for (let i = 0; i < nAlong; i++) {
+              const t = ((i + 0.5) / nAlong) * s.len;
+              for (let j = 0; j < nAcross; j++) {
+                const v = ((j + 0.5) / nAcross - 0.5) * STROKE_W;
+                const gx = s.x1 + ux * t + px * v + (Math.random() - 0.5) * wob;
+                const gy = s.y1 + uy * t + py * v + (Math.random() - 0.5) * wob;
+                const m = map(gx, gy);
+                pts.push([m[0], m[1], s.white]);
+              }
             }
-          });
+          }
 
-          let guard = 0;
-          const headCount = Math.round(target * (1 - strokeShare));
-          while (pts.length < target + headCount && guard++ < 20000) {
-            const px = 58 + Math.random() * 36;
-            const py = 8 + Math.random() * 34;
-            if (pointInHead(px, py)) pts.push(map(px, py));
+          const hx = HEAD.map((p) => p[0]), hy = HEAD.map((p) => p[1]);
+          for (let y = Math.min(...hy); y <= Math.max(...hy); y += spacing) {
+            for (let x = Math.min(...hx); x <= Math.max(...hx); x += spacing) {
+              const gx = x + (Math.random() - 0.5) * wob;
+              const gy = y + (Math.random() - 0.5) * wob;
+              if (!pointInHead(gx, gy)) continue;
+              const m = map(gx, gy);
+              pts.push([m[0], m[1], 0]);
+            }
           }
 
           for (let i = pts.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [pts[i], pts[j]] = [pts[j], pts[i]];
           }
-          glyph = pts;
+          // One target per agent: leftovers would leave the mark full of holes.
+          while (pts.length && pts.length < budget) pts.push(pts[Math.floor(Math.random() * pts.length)].slice());
+          glyph = pts.slice(0, budget);
+          // Slightly over half the lattice pitch so neighbouring dots merge —
+          // any less and the grid shows through as regular gaps.
+          glyphDot = Math.max(1.2, spacing * S * 0.66);
+
+          // The real mark in screen space. Once the swarm has landed it
+          // crossfades into this, so the hold shows the actual logo rather
+          // than a dotted impression of one.
+          markGeom = {
+            strokes: STROKES.map(([x1, y1, x2, y2, white]) => {
+              const a = map(x1, y1), b = map(x2, y2);
+              return [a[0], a[1], b[0], b[1], white];
+            }),
+            head: HEAD.map((p) => map(p[0], p[1])),
+            lw: STROKE_W * S,
+          };
         }
 
         function buildAgents() {
@@ -355,7 +405,7 @@
             speed: 0.72 + Math.random() * 0.72,
             pull: 0.3 + Math.random() * 0.26,
             swirl: 0.5 + Math.random() * 0.42,
-            target: glyph[i % Math.max(glyph.length, 1)] || [w / 2, h / 2],
+            target: glyph[i] || [w / 2, h / 2, 0],
           }));
         }
 
@@ -373,8 +423,17 @@
           else if (phase === "hold" && elapsed > CYCLE.hold) { phase = "release"; phaseAt = now; }
           else if (phase === "release" && elapsed > CYCLE.release) { phase = "idle"; phaseAt = now; }
 
-          const forming = phase === "form" || phase === "hold";
-          const lock = phase === "hold" ? 1 : phase === "form" ? Math.min(1, elapsed / CYCLE.form) : 0;
+          let lock = 0;
+          if (phase === "form") lock = Math.min(1, elapsed / CYCLE.form);
+          else if (phase === "hold") lock = 1;
+          else if (phase === "release") lock = Math.max(0, 1 - elapsed / CYCLE.release);
+          const forming = lock > 0;
+          // Last stretch of the landing: dots hand off to the solid mark.
+          const fuse = Math.max(0, Math.min(1, (lock - 0.72) / 0.28));
+
+          // Ease the scrim back while the mark holds, or its white strokes
+          // wash out to grey. The copy keeps its own text-shadow.
+          scrim.style.opacity = String(1 - lock * 0.25);
 
           // Crisper trails while the mark is assembling, longer streaks while drifting.
           ctx.globalCompositeOperation = "source-over";
@@ -392,33 +451,44 @@
           for (const a of agents) {
             let ax = 0, ay = 0;
 
+            // Drift and cursor forces fade out as the mark locks in, or they
+            // fight the spring and the shape never lines up.
+            const free = 1 - lock;
             const ang = flowAngle(a.x, a.y, now);
-            ax += Math.cos(ang) * 0.045 * a.speed;
-            ay += Math.sin(ang) * 0.045 * a.speed;
+            ax += Math.cos(ang) * 0.045 * a.speed * free;
+            ay += Math.sin(ang) * 0.045 * a.speed * free;
 
-            if (pointer.active) {
+            if (pointer.active && free > 0.01) {
               const dx = pointer.x - a.x, dy = pointer.y - a.y;
               const d2 = dx * dx + dy * dy;
               if (d2 < R * R && d2 > 1) {
                 const d = Math.sqrt(d2);
-                const f = (1 - d / R) * a.pull;
+                const f = (1 - d / R) * a.pull * free;
                 ax += (dx / d) * f - (dy / d) * f * a.swirl;
                 ay += (dy / d) * f + (dx / d) * f * a.swirl;
               }
             }
 
             if (lock > 0) {
-              const [tx, ty] = a.target;
-              ax += (tx - a.x) * 0.014 * lock;
-              ay += (ty - a.y) * 0.014 * lock;
+              ax += (a.target[0] - a.x) * 0.02 * lock;
+              ay += (a.target[1] - a.y) * 0.02 * lock;
             }
 
-            a.vx = (a.vx + ax) * (lock > 0 ? 0.9 - lock * 0.16 : 0.965);
-            a.vy = (a.vy + ay) * (lock > 0 ? 0.9 - lock * 0.16 : 0.965);
+            a.vx = (a.vx + ax) * (lock > 0 ? 0.94 - lock * 0.5 : 0.965);
+            a.vy = (a.vy + ay) * (lock > 0 ? 0.94 - lock * 0.5 : 0.965);
 
             const px = a.x, py = a.y;
             a.x += a.vx;
             a.y += a.vy;
+
+            // A spring alone leaves agents orbiting their targets, so close the
+            // last of the gap directly — this is what makes the mark crisp.
+            if (lock > 0.15) {
+              const k = (lock - 0.15) / 0.85;
+              const grab = 0.34 * k * k;
+              a.x += (a.target[0] - a.x) * grab;
+              a.y += (a.target[1] - a.y) * grab;
+            }
 
             // Wrapping teleports the agent, so skip that frame's segment —
             // drawing it would streak a line clear across the viewport.
@@ -453,36 +523,53 @@
             // Settled agents barely move, so their streak vanishes. Collect
             // them for a separate non-additive pass — redrawing dots in place
             // under "lighter" would accumulate to white and lose the green.
-            if (lock > 0.3) settled.push(a.x, a.y, a.white ? 1 : 0);
+            if (lock > 0.25) settled.push(a.x, a.y, a.target[2]);
           }
 
           if (settled.length) {
             ctx.globalCompositeOperation = "source-over";
-            const r = 1.2 + lock * 0.85;
+            const r = glyphDot * (0.55 + lock * 0.45);
             for (let i = 0; i < settled.length; i += 3) {
               const c = settled[i + 2] ? WHITE : GREEN;
-              ctx.fillStyle = `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${0.3 + lock * 0.42})`;
+              ctx.fillStyle = `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${(0.4 + lock * 0.42) * (1 - fuse)})`;
               ctx.beginPath();
               ctx.arc(settled[i], settled[i + 1], r, 0, 6.2832);
               ctx.fill();
             }
           }
 
+          // Held just under full opacity so the headline still reads through it.
+          if (fuse > 0 && markGeom) drawMark(fuse * 0.82);
+
           raf = requestAnimationFrame(step);
+        }
+
+        // The actual logo, drawn in screen space with real round-capped
+        // strokes and a filled chevron head.
+        function drawMark(alpha) {
+          ctx.globalCompositeOperation = "source-over";
+          ctx.lineCap = "round";
+          ctx.lineWidth = markGeom.lw;
+          for (const [x1, y1, x2, y2, white] of markGeom.strokes) {
+            const c = white ? WHITE : GREEN;
+            ctx.strokeStyle = `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${alpha})`;
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+          }
+          ctx.fillStyle = `rgba(${GREEN[0]}, ${GREEN[1]}, ${GREEN[2]}, ${alpha})`;
+          ctx.beginPath();
+          markGeom.head.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
+          ctx.closePath();
+          ctx.fill();
         }
 
         function renderStill() {
           ctx.fillStyle = BG;
           ctx.fillRect(0, 0, w, h);
           ctx.globalCompositeOperation = "lighter";
-          agents.forEach((a, i) => {
-            const [tx, ty] = glyph[i % Math.max(glyph.length, 1)] || [w / 2, h / 2];
-            const c = a.white ? WHITE : GREEN;
-            ctx.fillStyle = `rgba(${c[0]}, ${c[1]}, ${c[2]}, 0.62)`;
-            ctx.beginPath();
-            ctx.arc(tx, ty, 1.9, 0, 6.2832);
-            ctx.fill();
-          });
+          if (markGeom) drawMark(0.5);
         }
 
         let raf = 0;
